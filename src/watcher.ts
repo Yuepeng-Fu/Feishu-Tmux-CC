@@ -34,6 +34,7 @@ export class SessionWatcher {
   private stable = 0;
   private misses = 0;
   private polling = false;
+  private armed = false;
 
   constructor(session: string, opts: WatcherOptions) {
     this.session = session;
@@ -42,6 +43,26 @@ export class SessionWatcher {
 
   getState(): WatchState {
     return this.state;
+  }
+
+  /** Run one poll cycle immediately (e.g. right after injecting keystrokes)
+   * so callers can read a fresh state. Safe to call anytime. */
+  async refresh(): Promise<void> {
+    await this.poll();
+  }
+
+  /** Arm a one-shot idle report: the next time the session settles into idle
+   * (whether or not a busy period was detected in between), fire onIdle.
+   * Used after every user poke (text inject / keystrokes) so quick tool
+   * calls without a visible busy footer still get a completion report.
+   *
+   * Stability must be re-established from scratch: the pre-poke screen was
+   * already stable, so without resetting, the next poll would fire with
+   * pre-poke content before the TUI even reacts to the keystrokes. */
+  arm(): void {
+    this.armed = true;
+    this.stable = 0;
+    this.lastHash = "";
   }
 
   start(): void {
@@ -93,8 +114,11 @@ export class SessionWatcher {
 
       if (hash === this.lastHash) {
         this.stable++;
-        if (this.state === "busy" && this.stable >= this.opts.idleStableCount) {
+        const settled = this.stable >= this.opts.idleStableCount;
+        const wasBusy = this.state === "busy";
+        if (settled && (wasBusy || this.armed)) {
           this.state = "idle";
+          this.armed = false;
           const tail = lines.slice(-TAIL_LINES).join("\n");
           this.opts.onIdle(this.session, tail);
         }

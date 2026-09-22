@@ -111,13 +111,15 @@ export class CommandRouter {
       case "esc":
         await this.withBinding(chatId, async (s) => {
           await sendKey(s, "Escape");
-          await this.gateway.sendText(chatId, "⎋ 已发送 Esc");
+          this.watchers.get(chatId)?.arm();
+          await this.gateway.sendText(chatId, `⎋ 已发送 Esc\n当前状态: ${await this.stateLabel(chatId)}`);
         });
         return;
       case "ctrl-c":
         await this.withBinding(chatId, async (s) => {
           await sendKey(s, "C-c");
-          await this.gateway.sendText(chatId, "⏹ 已发送 Ctrl+C");
+          this.watchers.get(chatId)?.arm();
+          await this.gateway.sendText(chatId, `⏹ 已发送 Ctrl+C\n当前状态: ${await this.stateLabel(chatId)}`);
         });
         return;
       case "status":
@@ -169,7 +171,8 @@ export class CommandRouter {
     }
     await this.withBinding(chatId, async (s) => {
       for (const k of keys) await sendKey(s, k);
-      await this.gateway.sendText(chatId, `⌨ 已发送: ${keys.join(" ")}`);
+      this.watchers.get(chatId)?.arm();
+      await this.gateway.sendText(chatId, `⌨ 已发送: ${keys.join(" ")}\n当前状态: ${await this.stateLabel(chatId)}`);
     });
   }
 
@@ -217,8 +220,9 @@ export class CommandRouter {
   private async inject(chatId: string, text: string): Promise<void> {
     await this.withBinding(chatId, async (s) => {
       await sendText(s, text);
+      this.watchers.get(chatId)?.arm();
       const desc = text.includes("\n") ? `多行粘贴, ${text.split("\n").length} 行` : `${text.length} 字`;
-      await this.gateway.sendText(chatId, `📨 已注入 ${s} (${desc})`);
+      await this.gateway.sendText(chatId, `📨 已注入 ${s} (${desc})\n当前状态: ${await this.stateLabel(chatId)}`);
     });
   }
 
@@ -229,6 +233,14 @@ export class CommandRouter {
       return;
     }
     await fn(binding.session);
+  }
+
+  /** Fresh busy/idle label for the chat's watcher (one immediate poll). */
+  private async stateLabel(chatId: string): Promise<string> {
+    const watcher = this.watchers.get(chatId);
+    if (!watcher) return "未知";
+    await watcher.refresh();
+    return STATE_LABEL[watcher.getState()] ?? watcher.getState();
   }
 
   private startWatcher(chatId: string, session: string): void {
