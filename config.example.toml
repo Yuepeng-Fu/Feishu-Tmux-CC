@@ -1,0 +1,16 @@
+[feishu]
+app_id = "cli_xxx"
+app_secret = "xxx"
+
+[bot]
+# Polling interval (ms) for pane capture / idle detection
+poll_ms = 1500
+# Lines of scrollback captured by /snap
+snap_lines = 300
+# Consecutive stable polls required before declaring idle
+idle_stable_count = 3
+
+[security]
+# Chat IDs allowed to use the bot. Empty = allow all chats the bot is in.
+# Recommended: the injected keystrokes may control a session with elevated permissions.
+allowed_chat_ids = []
